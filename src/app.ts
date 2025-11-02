@@ -7,10 +7,8 @@ import fastifySwaggerUi from '@fastify/swagger-ui'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 
 import { env, googleOAuthOptions } from '~/config'
-import { db } from '~/db'
-import { UserRepository } from '~/repositories'
+import { setupContainer } from '~/container'
 import { authRoutes, healthRoutes } from '~/routes'
-import { AuthService } from '~/services'
 
 export async function buildApp() {
   const app = fastify({
@@ -78,13 +76,12 @@ export async function buildApp() {
 
   await app.register(fastifyOAuth2, googleOAuthOptions)
 
-  // Initialize repositories and services
-  const userRepository = new UserRepository(db)
-  const authService = new AuthService(userRepository)
+  // Setup dependency injection container
+  const container = setupContainer()
 
-  // Register routes
-  await healthRoutes(app)
-  await authRoutes(app, authService)
+  // Register routes with DI container
+  await healthRoutes(app, container)
+  await authRoutes(app, container)
 
   return app
 }

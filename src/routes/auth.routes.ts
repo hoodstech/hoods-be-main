@@ -1,7 +1,8 @@
 import type { FastifyInstance, FastifyRequest } from 'fastify'
 import { Type } from '@sinclair/typebox'
+import type { AwilixContainer } from 'awilix'
 
-import type { AuthService } from '~/services'
+import type { Container } from '~/container'
 import type { GoogleUserProfile } from '~/types'
 
 import { requireAuth } from '~/middlewares'
@@ -15,8 +16,9 @@ import {
 
 export async function authRoutes(
   fastify: FastifyInstance,
-  authService: AuthService
+  container: AwilixContainer<Container>
 ) {
+  const { authService } = container.cradle
   // Register endpoint
   fastify.post('/auth/register', {
     schema: {

@@ -1,8 +1,9 @@
 import { Type } from '@sinclair/typebox'
-import { FastifyInstance } from 'fastify'
+import type { FastifyInstance } from 'fastify'
 import { sql } from 'drizzle-orm'
+import type { AwilixContainer } from 'awilix'
 
-import { db } from '~/db'
+import type { Container } from '~/container'
 
 const HealthResponseSchema = Type.Object({
   status: Type.String({ description: 'Service status' }),
@@ -17,7 +18,12 @@ const HealthResponseSchema = Type.Object({
   description: 'Health check response'
 })
 
-export async function healthRoutes(fastify: FastifyInstance) {
+export async function healthRoutes(
+  fastify: FastifyInstance,
+  container: AwilixContainer<Container>
+) {
+  const { db } = container.cradle
+
   fastify.get('/health', {
     schema: {
       tags: ['health'],
@@ -61,7 +67,7 @@ export async function healthRoutes(fastify: FastifyInstance) {
     }
   })
 
-  fastify.get('/health/db', {
+  fastify.get('/health/pg', {
     schema: {
       tags: ['health'],
       description: 'Check database connection only',

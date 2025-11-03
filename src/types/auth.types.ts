@@ -1,0 +1,25 @@
+export interface GoogleUserProfile {
+  sub: string;
+  email: string;
+  name?: string;
+  picture?: string;
+  email_verified?: boolean;
+}
+
+export interface AuthTokens {
+  accessToken: string;
+  refreshToken?: string;
+}
+
+export interface LoginCredentials {
+  email: string;
+  password: string;
+}
+
+export type LoginData = LoginCredentials
+
+export interface RegisterData {
+  email: string;
+  password: string;
+  name?: string;
+}

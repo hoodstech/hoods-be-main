@@ -1,2 +1,6 @@
 export * from './base.repository'
 export * from './user.repository'
+export * from './item.repository'
+export * from './tag.repository'
+export * from './interaction.repository'
+export * from './feed.repository'

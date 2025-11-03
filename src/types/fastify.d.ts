@@ -1,8 +1,10 @@
 import 'fastify'
+import type { UserRole } from '~/db/schemas'
 
 declare module 'fastify' {
   interface FastifyRequest {
     userId?: string
+    userRole?: UserRole
   }
 
   interface FastifyInstance {

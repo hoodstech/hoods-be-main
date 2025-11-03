@@ -17,6 +17,7 @@ export const googleOAuthOptions: FastifyOAuth2Options = {
       tokenPath: '/oauth2/v4/token'
     }
   },
-  startRedirectPath: '/auth/google',
+  // Don't auto-register the start route - we'll register it manually in auth.routes.ts with Swagger tags
+  // startRedirectPath: '/auth/google',
   callbackUri: env.GOOGLE_CALLBACK_URL
 }

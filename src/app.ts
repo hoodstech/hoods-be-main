@@ -8,7 +8,7 @@ import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 
 import { env, googleOAuthOptions } from '~/config'
 import { setupContainer } from '~/container'
-import { authRoutes, healthRoutes } from '~/routes'
+import { authRoutes, buyerRoutes, healthRoutes, sellerRoutes } from '~/routes'
 
 export async function buildApp() {
   const app = fastify({
@@ -40,7 +40,9 @@ export async function buildApp() {
       ],
       tags: [
         { name: 'auth', description: 'Authentication endpoints' },
-        { name: 'health', description: 'Health check endpoints' }
+        { name: 'health', description: 'Health check endpoints' },
+        { name: 'seller', description: 'Seller endpoints for managing items and tags' },
+        { name: 'buyer', description: 'Buyer endpoints for feed and interactions' }
       ],
       components: {
         securitySchemes: {
@@ -59,7 +61,9 @@ export async function buildApp() {
     routePrefix: '/docs',
     uiConfig: {
       docExpansion: 'list',
-      deepLinking: true
+      deepLinking: true,
+      persistAuthorization: true,
+      withCredentials: true
     },
     staticCSP: true
   })
@@ -79,9 +83,13 @@ export async function buildApp() {
   // Setup dependency injection container
   const container = setupContainer()
 
-  // Register routes with DI container
-  await healthRoutes(app, container)
-  await authRoutes(app, container)
+  // Register routes with DI container and v1 prefix
+  await app.register(async (instance) => {
+    await healthRoutes(instance, container)
+    await authRoutes(instance, container)
+    await sellerRoutes(instance, container)
+    await buyerRoutes(instance, container)
+  }, { prefix: '/v1' })
 
   return app
 }

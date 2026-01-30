@@ -1,12 +1,15 @@
 import fastify from 'fastify'
 import fastifyCookie from '@fastify/cookie'
 import fastifyCors from '@fastify/cors'
+import fastifyHelmet from '@fastify/helmet'
+import fastifyJWT from '@fastify/jwt'
 import fastifyOAuth2 from '@fastify/oauth2'
+import fastifyRateLimit from '@fastify/rate-limit'
 import fastifySwagger from '@fastify/swagger'
 import fastifySwaggerUi from '@fastify/swagger-ui'
 import { TypeBoxTypeProvider } from '@fastify/type-provider-typebox'
 
-import { env, googleOAuthOptions } from '~/config'
+import { env, googleOAuthOptions, jwtConfig } from '~/config'
 import { setupContainer } from '~/container'
 import { authRoutes, buyerRoutes, healthRoutes, sellerRoutes } from '~/routes'
 
@@ -68,7 +71,40 @@ export async function buildApp() {
     staticCSP: true
   })
 
-  // Register plugins
+  // Register security plugins
+  // Helmet must be registered before other plugins
+  await app.register(fastifyHelmet, {
+    contentSecurityPolicy: {
+      directives: {
+        defaultSrc: ['\'self\''],
+        styleSrc: ['\'self\'', '\'unsafe-inline\''],
+        scriptSrc: ['\'self\''],
+        imgSrc: ['\'self\'', 'data:', 'https:'],
+        connectSrc: ['\'self\''],
+        fontSrc: ['\'self\''],
+        objectSrc: ['\'none\''],
+        mediaSrc: ['\'self\''],
+        frameSrc: ['\'none\'']
+      }
+    },
+    crossOriginEmbedderPolicy: env.NODE_ENV === 'production',
+    crossOriginOpenerPolicy: { policy: 'same-origin' },
+    crossOriginResourcePolicy: { policy: 'same-origin' },
+    dnsPrefetchControl: { allow: false },
+    frameguard: { action: 'deny' },
+    hsts: {
+      maxAge: 31536000, // 1 year
+      includeSubDomains: true,
+      preload: true
+    },
+    ieNoOpen: true,
+    noSniff: true,
+    originAgentCluster: true,
+    permittedCrossDomainPolicies: { permittedPolicies: 'none' },
+    referrerPolicy: { policy: 'no-referrer' },
+    xssFilter: true
+  })
+
   await app.register(fastifyCors, {
     origin: env.APP_URL,
     credentials: true
@@ -76,6 +112,33 @@ export async function buildApp() {
 
   await app.register(fastifyCookie, {
     secret: env.COOKIE_SECRET
+  })
+
+  // Register JWT
+  await app.register(fastifyJWT, jwtConfig)
+
+  // Register global rate limiting
+  await app.register(fastifyRateLimit, {
+    global: true,
+    max: 100, // Maximum 100 requests
+    timeWindow: '15 minutes', // Per 15 minutes
+    cache: 10000, // Cache size
+    allowList: ['127.0.0.1'], // Whitelist localhost for development
+    skipOnError: false,
+    ban: 5, // Ban after 5 successive errors
+    continueExceeding: false,
+    enableDraftSpec: true,
+    addHeadersOnExceeding: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true
+    },
+    addHeaders: {
+      'x-ratelimit-limit': true,
+      'x-ratelimit-remaining': true,
+      'x-ratelimit-reset': true,
+      'retry-after': true
+    }
   })
 
   await app.register(fastifyOAuth2, googleOAuthOptions)

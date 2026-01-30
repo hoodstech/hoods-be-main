@@ -22,8 +22,8 @@ export async function sellerRoutes(
   fastify: FastifyInstance,
   container: AwilixContainer<Container>
 ) {
-  const { sellerService, userRepository } = container.cradle
-  const requireAuth = createAuthMiddleware(userRepository)
+  const { sellerService, authService } = container.cradle
+  const requireAuth = createAuthMiddleware(authService)
 
   // Create Seller (Admin only)
   fastify.post('/sellers', {

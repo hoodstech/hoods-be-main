@@ -10,7 +10,7 @@ export async function verifyPassword(
 ): Promise<boolean> {
   try {
     return await argon2.verify(hashedPassword, password)
-  } catch (error) {
+  } catch {
     return false
   }
 }

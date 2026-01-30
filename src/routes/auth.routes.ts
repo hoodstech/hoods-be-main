@@ -22,10 +22,16 @@ export async function authRoutes(
   fastify: FastifyInstance,
   container: AwilixContainer<Container>
 ) {
-  const { authService, googleOAuthService, userRepository } = container.cradle
-  const requireAuth = createAuthMiddleware(userRepository)
+  const { authService, googleOAuthService } = container.cradle
+  const requireAuth = createAuthMiddleware(authService)
   // Register endpoint
   fastify.post('/auth/register', {
+    config: {
+      rateLimit: {
+        max: 5, // Maximum 5 registration attempts
+        timeWindow: '15 minutes' // Per 15 minutes per IP
+      }
+    },
     schema: {
       tags: ['auth'],
       description: 'Register a new user with email and password',
@@ -42,12 +48,30 @@ export async function authRoutes(
       const body = request.body as { email: string; password: string; name?: string }
       const user = await authService.register(body)
 
-      // Set session cookie
-      reply.setCookie('user_id', user.id, {
+      // Generate JWT tokens and create session
+      const { accessToken, refreshToken } = await authService.generateTokens(
+        user,
+        fastify.jwt.sign.bind(fastify.jwt),
+        request.ip,
+        request.headers['user-agent']
+      )
+
+      // Set access token cookie
+      reply.setCookie('access_token', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 // 7 days
+        sameSite: 'strict',
+        maxAge: 15 * 60, // 15 minutes
+        path: '/'
+      })
+
+      // Set refresh token cookie
+      reply.setCookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: '/'
       })
 
       return reply.code(201).send({
@@ -83,6 +107,12 @@ export async function authRoutes(
 
   // Login endpoint
   fastify.post('/auth/login', {
+    config: {
+      rateLimit: {
+        max: 10, // Maximum 10 login attempts
+        timeWindow: '15 minutes' // Per 15 minutes per IP
+      }
+    },
     schema: {
       tags: ['auth'],
       description: 'Login with email and password',
@@ -99,12 +129,30 @@ export async function authRoutes(
       const body = request.body as { email: string; password: string }
       const user = await authService.login(body)
 
-      // Set session cookie
-      reply.setCookie('user_id', user.id, {
+      // Generate JWT tokens and create session
+      const { accessToken, refreshToken } = await authService.generateTokens(
+        user,
+        fastify.jwt.sign.bind(fastify.jwt),
+        request.ip,
+        request.headers['user-agent']
+      )
+
+      // Set access token cookie
+      reply.setCookie('access_token', accessToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
-        maxAge: 7 * 24 * 60 * 60 // 7 days
+        sameSite: 'strict',
+        maxAge: 15 * 60, // 15 minutes
+        path: '/'
+      })
+
+      // Set refresh token cookie
+      reply.setCookie('refresh_token', refreshToken, {
+        httpOnly: true,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'strict',
+        maxAge: 7 * 24 * 60 * 60, // 7 days
+        path: '/'
       })
 
       return reply.send({
@@ -279,7 +327,7 @@ export async function authRoutes(
   fastify.post('/auth/logout', {
     schema: {
       tags: ['auth'],
-      description: 'Logout current user',
+      description: 'Logout current user and revoke session',
       response: {
         200: MessageResponseSchema,
         401: ErrorResponseSchema
@@ -287,8 +335,15 @@ export async function authRoutes(
       security: [{ cookieAuth: [] }]
     },
     preHandler: requireAuth
-  }, async (_request, reply) => {
-    reply.clearCookie('user_id')
+  }, async (request, reply) => {
+    // Revoke session
+    if (request.jti) {
+      await authService.logout(request.jti)
+    }
+
+    // Clear cookies
+    reply.clearCookie('access_token', { path: '/' })
+    reply.clearCookie('refresh_token', { path: '/' })
 
     return reply.send({
       success: true,
@@ -300,6 +355,12 @@ export async function authRoutes(
   fastify.post<{
     Body: { email: string; password: string; name?: string; role: 'admin' | 'seller' | 'buyer' }
   }>('/auth/admin/users', {
+    config: {
+      rateLimit: {
+        max: 20, // Maximum 20 admin user creations
+        timeWindow: '15 minutes'
+      }
+    },
     schema: {
       tags: ['auth'],
       summary: 'Create user with specified role',

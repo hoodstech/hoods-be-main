@@ -1,21 +1,26 @@
 import { asClass, asValue, createContainer, InjectionMode } from 'awilix'
+import type Redis from 'ioredis'
 
 import { db } from '~/db'
-import { FeedRepository, InteractionRepository, ItemRepository, TagRepository, UserRepository } from '~/repositories'
-import { AuthService, BuyerService, GoogleOAuthService, RecommendationService, SellerService } from '~/services'
+import { getRedisClient } from '~/config'
+import { FeedRepository, InteractionRepository, ItemRepository, SessionRepository, TagRepository, UserRepository } from '~/repositories'
+import { AuthService, BuyerService, GoogleOAuthService, RecommendationService, SellerService, SessionService } from '~/services'
 
 export interface Container {
   db: typeof db
+  redis: Redis
   userRepository: UserRepository
   itemRepository: ItemRepository
   tagRepository: TagRepository
   interactionRepository: InteractionRepository
   feedRepository: FeedRepository
+  sessionRepository: SessionRepository
   authService: AuthService
   googleOAuthService: GoogleOAuthService
   sellerService: SellerService
   recommendationService: RecommendationService
   buyerService: BuyerService
+  sessionService: SessionService
 }
 
 export function setupContainer() {
@@ -23,9 +28,10 @@ export function setupContainer() {
     injectionMode: InjectionMode.CLASSIC
   })
 
-  // Register database
+  // Register database and Redis
   container.register({
-    db: asValue(db)
+    db: asValue(db),
+    redis: asValue(getRedisClient())
   })
 
   // Register repositories
@@ -34,7 +40,8 @@ export function setupContainer() {
     itemRepository: asClass(ItemRepository).singleton(),
     tagRepository: asClass(TagRepository).singleton(),
     interactionRepository: asClass(InteractionRepository).singleton(),
-    feedRepository: asClass(FeedRepository).singleton()
+    feedRepository: asClass(FeedRepository).singleton(),
+    sessionRepository: asClass(SessionRepository).singleton()
   })
 
   // Register services
@@ -43,7 +50,8 @@ export function setupContainer() {
     googleOAuthService: asClass(GoogleOAuthService).singleton(),
     sellerService: asClass(SellerService).singleton(),
     recommendationService: asClass(RecommendationService).singleton(),
-    buyerService: asClass(BuyerService).singleton()
+    buyerService: asClass(BuyerService).singleton(),
+    sessionService: asClass(SessionService).singleton()
   })
 
   return container

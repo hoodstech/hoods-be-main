@@ -19,8 +19,8 @@ export async function buyerRoutes(
   fastify: FastifyInstance,
   container: AwilixContainer<Container>
 ) {
-  const { buyerService, userRepository } = container.cradle
-  const requireAuth = createAuthMiddleware(userRepository)
+  const { buyerService, authService } = container.cradle
+  const requireAuth = createAuthMiddleware(authService)
   const requireBuyer = requireRole('buyer', 'admin')
 
   // GET /feed - Get today's full feed

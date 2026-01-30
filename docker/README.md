@@ -53,9 +53,10 @@ This creates the `src/db/migrations/` directory with the necessary migration fil
 - **Hot Reload**: Source code changes are automatically reflected (via volume mounts)
 - **Automatic Migrations**: Database migrations run on container startup
 - **Automatic Seeding**: Admin user is created on first run
+- **Redis**: In-memory cache for session management and authentication
 - **pgAdmin**: Web-based database management interface at `http://localhost:5050`
-- **Isolated Network**: App and database communicate via Docker network
-- **Health Checks**: Both postgres and app containers have health checks
+- **Isolated Network**: App, database, and Redis communicate via Docker network
+- **Health Checks**: PostgreSQL, Redis, and app containers have health checks
 - **Environment Validation**: Required variables are checked before startup
 
 ### Starting Development Environment
@@ -76,11 +77,18 @@ docker logs -f hoods-postgres-dev
 
 # View pgAdmin logs only
 docker logs -f hoods-pgadmin-dev
+
+# View Redis logs only
+docker logs -f hoods-redis-dev
 ```
 
 ### Accessing Services
 
 - **Application**: http://localhost:3000
+  - Health check: http://localhost:3000/v1/health
+  - API docs: http://localhost:3000/docs
+- **PostgreSQL**: localhost:5432
+- **Redis**: localhost:6379
 - **pgAdmin**: http://localhost:5050
   - Email: `admin@admin.com` (or value from `PGADMIN_EMAIL`)
   - Password: `admin` (or value from `PGADMIN_PASSWORD`)
@@ -132,6 +140,11 @@ Node modules are in a named volume to avoid conflicts with host OS.
 
 Development uses `.env.development` with the following overrides in docker-compose:
 - `DATABASE_URL` - Points to `postgres` service instead of `localhost`
+- `REDIS_HOST` - Points to `redis` service instead of `localhost`
+
+**Important for local development without Docker:**
+- Set `REDIS_HOST=localhost` in `.env.development` when running the app locally
+- Set `REDIS_HOST=redis` when running in Docker (automatically set in docker-compose)
 
 ## Production Environment
 
@@ -159,9 +172,11 @@ npm run docker:prod
 npm run docker:prod:down
 ```
 
-## Database Access
+## Service Access
 
-### From Host Machine
+### PostgreSQL
+
+#### From Host Machine
 
 When containers are running, PostgreSQL is accessible at:
 - Host: `localhost`
@@ -170,12 +185,38 @@ When containers are running, PostgreSQL is accessible at:
 - Password: Value from `POSTGRES_PASSWORD`
 - Database: Value from `POSTGRES_DB`
 
-### From App Container
+#### From App Container
 
 The app connects to PostgreSQL via Docker network:
 - Host: `postgres` (service name)
 - Port: `5432`
 - Connection string is automatically set via `DATABASE_URL` environment variable
+
+### Redis
+
+#### From Host Machine
+
+When containers are running, Redis is accessible at:
+- Host: `localhost`
+- Port: `6379` (or `REDIS_PORT` from .env)
+- Password: Value from `REDIS_PASSWORD` (empty for development)
+- Database: Value from `REDIS_DB` (default: 0)
+
+Test connection:
+```bash
+# Using redis-cli (if installed locally)
+redis-cli ping
+
+# Using Docker
+docker exec hoods-redis-dev redis-cli ping
+```
+
+#### From App Container
+
+The app connects to Redis via Docker network:
+- Host: `redis` (service name)
+- Port: `6379`
+- Configured via environment variables: `REDIS_HOST`, `REDIS_PORT`, `REDIS_PASSWORD`, `REDIS_DB`
 
 ## Troubleshooting
 
@@ -222,6 +263,8 @@ The app connects to PostgreSQL via Docker network:
 # Stop and remove all containers, networks, and volumes
 npm run docker:dev:down
 docker volume rm hoods-be-main_postgres_data_dev
+docker volume rm hoods-be-main_redis_data_dev
+docker volume rm hoods-be-main_pgadmin_data_dev
 
 # Rebuild and start
 npm run docker:dev
@@ -236,36 +279,75 @@ curl http://localhost:5432  # Should connect
 docker exec hoods-postgres-dev pg_isready -U hoods_user
 ```
 
+### Redis
+
+```bash
+# Test Redis connection
+docker exec hoods-redis-dev redis-cli ping  # Should return PONG
+
+# Check Redis info
+docker exec hoods-redis-dev redis-cli info server
+
+# Monitor Redis commands in real-time
+docker exec hoods-redis-dev redis-cli monitor
+```
+
 ### Application
 
 ```bash
 # General health check
-curl http://localhost:3000/health
+curl http://localhost:3000/v1/health
 
-# Database-specific health check
-curl http://localhost:3000/health/db
+# Should return: {"status":"ok","timestamp":"...","database":{"connected":true,"latency":...}}
 ```
 
 ## Network Architecture
 
 ```
-┌─────────────────────────────────────┐
-│          Host Machine               │
-│  ┌──────────────────────────────┐   │
-│  │    Docker Network            │   │
-│  │  ┌────────────────────────┐  │   │
-│  │  │  hoods-postgres-dev    │  │   │
-│  │  │  Port: 5432            │  │   │
-│  │  └────────────────────────┘  │   │
-│  │           ↑                   │   │
-│  │           │ postgres:5432     │   │
-│  │           ↓                   │   │
-│  │  ┌────────────────────────┐  │   │
-│  │  │  hoods-app-dev         │  │   │
-│  │  │  Port: 3000            │  │   │
-│  │  └────────────────────────┘  │   │
-│  └──────────────────────────────┘   │
-│         ↓                            │
-│    localhost:3000                    │
-└─────────────────────────────────────┘
+┌─────────────────────────────────────────────────┐
+│               Host Machine                      │
+│  ┌──────────────────────────────────────────┐   │
+│  │         Docker Network (dev_network)     │   │
+│  │  ┌────────────────────────┐              │   │
+│  │  │  hoods-postgres-dev    │              │   │
+│  │  │  Port: 5432            │              │   │
+│  │  └────────────────────────┘              │   │
+│  │           ↑                               │   │
+│  │           │ postgres:5432                 │   │
+│  │  ┌────────────────────────┐              │   │
+│  │  │  hoods-redis-dev       │              │   │
+│  │  │  Port: 6379            │              │   │
+│  │  └────────────────────────┘              │   │
+│  │           ↑                               │   │
+│  │           │ redis:6379                    │   │
+│  │           ↓                               │   │
+│  │  ┌────────────────────────┐              │   │
+│  │  │  hoods-app-dev         │              │   │
+│  │  │  Port: 3000            │              │   │
+│  │  │  - Uses Redis for      │              │   │
+│  │  │    sessions            │              │   │
+│  │  │  - Connects to         │              │   │
+│  │  │    PostgreSQL          │              │   │
+│  │  └────────────────────────┘              │   │
+│  │  ┌────────────────────────┐              │   │
+│  │  │  hoods-pgadmin-dev     │              │   │
+│  │  │  Port: 80              │              │   │
+│  │  └────────────────────────┘              │   │
+│  └──────────────────────────────────────────┘   │
+│         ↓          ↓          ↓                  │
+│    localhost:   localhost:  localhost:           │
+│       3000         5432        6379               │
+│                                                   │
+│    pgAdmin at localhost:5050                     │
+└─────────────────────────────────────────────────┘
 ```
+
+### Services Communication
+
+- **App → PostgreSQL**: Via `postgres:5432` (Docker network)
+- **App → Redis**: Via `redis:6379` (Docker network)
+- **pgAdmin → PostgreSQL**: Via `postgres:5432` (Docker network)
+- **Host → App**: Via `localhost:3000`
+- **Host → PostgreSQL**: Via `localhost:5432`
+- **Host → Redis**: Via `localhost:6379`
+- **Host → pgAdmin**: Via `localhost:5050`

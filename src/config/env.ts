@@ -32,16 +32,32 @@ const EnvSchema = Type.Object({
   GOOGLE_CLIENT_SECRET: Type.String({ minLength: 1 }),
   GOOGLE_CALLBACK_URL: Type.String({ format: 'uri' }),
   COOKIE_SECRET: Type.String({ minLength: 1 }),
-  APP_URL: Type.String({ format: 'uri' })
+  APP_URL: Type.String({ format: 'uri' }),
+  // JWT Configuration
+  JWT_SECRET: Type.String({ minLength: 32 }),
+  JWT_ACCESS_EXPIRATION: Type.String({ default: '15m' }),
+  JWT_REFRESH_EXPIRATION: Type.String({ default: '7d' }),
+  // Redis Configuration
+  REDIS_HOST: Type.String({ default: 'localhost' }),
+  REDIS_PORT: Type.Number({ default: 6379 }),
+  REDIS_PASSWORD: Type.Optional(Type.String()),
+  REDIS_DB: Type.Number({ default: 0 }),
+  // Session Configuration
+  SESSION_MAX_CONCURRENT: Type.Number({ default: 5 }),
+  SESSION_STRICT_IP_CHECK: Type.Boolean({ default: false })
 })
 
 export type Env = Static<typeof EnvSchema>
 
 const parseEnv = (): Env => {
-  // Convert PORT to number if it's a string
+  // Convert string values to appropriate types
   const rawEnv = {
     ...process.env,
-    PORT: process.env.PORT ? Number(process.env.PORT) : undefined
+    PORT: process.env.PORT ? Number(process.env.PORT) : undefined,
+    REDIS_PORT: process.env.REDIS_PORT ? Number(process.env.REDIS_PORT) : undefined,
+    REDIS_DB: process.env.REDIS_DB ? Number(process.env.REDIS_DB) : undefined,
+    SESSION_MAX_CONCURRENT: process.env.SESSION_MAX_CONCURRENT ? Number(process.env.SESSION_MAX_CONCURRENT) : undefined,
+    SESSION_STRICT_IP_CHECK: process.env.SESSION_STRICT_IP_CHECK === 'true'
   }
 
   // Apply defaults

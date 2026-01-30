@@ -5,6 +5,7 @@ declare module 'fastify' {
   interface FastifyRequest {
     userId?: string
     userRole?: UserRole
+    jti?: string // JWT ID for session tracking
   }
 
   interface FastifyInstance {

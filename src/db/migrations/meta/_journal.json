@@ -15,6 +15,13 @@
       "when": 1762105910880,
       "tag": "0001_boring_moonstone",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1768683063520,
+      "tag": "0002_legal_selene",
+      "breakpoints": true
     }
   ]
 }
